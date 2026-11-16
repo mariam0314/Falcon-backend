@@ -119,6 +119,36 @@ router.get(
   ProductController.getNearbyProducts
 );
 
+/**
+ * @route   GET /api/products/refurbished
+ * @desc    Public shortcut to browse refurbished products directly
+ * @access  Public
+ */
+router.get("/refurbished", optionalAuthenticate, (req, res, next) => {
+  req.query.deviceType = req.query.deviceType || "refurbished";
+  return ProductController.getProducts(req, res, next);
+});
+
+/**
+ * @route   GET /api/products/mobiles
+ * @desc    Public shortcut to browse mobile phones directly
+ * @access  Public
+ */
+router.get("/mobiles", optionalAuthenticate, (req, res, next) => {
+  req.query.category = "mobile";
+  return ProductController.getProducts(req, res, next);
+});
+
+/**
+ * @route   GET /api/products/laptops
+ * @desc    Public shortcut to browse laptops directly
+ * @access  Public
+ */
+router.get("/laptops", optionalAuthenticate, (req, res, next) => {
+  req.query.category = "laptop";
+  return ProductController.getProducts(req, res, next);
+});
+
 ////////////////////////////////////////////////////////////////////
 //// DYNAMIC :id ROUTES — always last
 ////////////////////////////////////////////////////////////////////

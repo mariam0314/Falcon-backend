@@ -219,29 +219,34 @@ function checkAccountStatus(req, res, next) {
   next();
 }
 
-// OPTIONAL AUTH
+// OPTIONAL AUTH — allows unauthenticated public access while preserving user identity if valid token is provided
 async function optionalAuthenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) return next();
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.split(" ")[1]?.trim();
+    if (!token || token === "undefined" || token === "null") return next();
 
     const isBlacklisted = await redisClient.get(BLACKLIST_KEY(token)).catch(() => null);
     if (isBlacklisted) return next();
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded || !decoded.userId) return next();
+
     const user = await userModel
       .findById(decoded.userId)
       .select("-refreshToken")
       .lean();
 
-    if (user) {
+    if (user && user.isActive) {
       req.user = user;
       req.token = token;
     }
     next();
   } catch {
+    // Any error during optional auth (expired token, invalid signature, DB hiccup)
+    // must NOT block public visitors from browsing products
     next();
   }
 }
