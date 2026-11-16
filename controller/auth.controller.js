@@ -729,7 +729,7 @@ async function demoVerifyOtpController(req, res) {
 
       if (!user) {
         const clean10 = digits.slice(-10);
-        const synthEmail = `customer_${clean10}@falcon.local`;
+        const synthEmail = `customer_${clean10}@felcon.local`;
 
         user = await userModel.create({
           firstname: "Customer",

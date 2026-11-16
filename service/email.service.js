@@ -19,7 +19,7 @@ transporter.verify((error) => {
 const sendEmail = async (to, subject, text, html) => {
   try {
     const info = await transporter.sendMail({
-      from: `"FALCON" <${process.env.EMAIL_USER}>`,
+      from: `"FELCON" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       text,
@@ -42,7 +42,7 @@ const layout = (accentColor, headerTitle, bodyHtml) => `
       ${bodyHtml}
     </div>
     <div style="background:#f1f1f1; padding:15px; text-align:center; font-size:13px; color:#666;">
-      © ${new Date().getFullYear()} FALCON • All Rights Reserved
+      © ${new Date().getFullYear()} FELCON SOLUTIONS INDIA LLP • All Rights Reserved
     </div>
   </div>
 </div>`;
@@ -66,14 +66,14 @@ const badge = (color, text) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function sendRegistrationEmail(email, firstname, otp) {
-  const subject = "Welcome to FALCON 🎉";
-  const text = `Hello ${firstname}, Your OTP is ${otp}. Thanks for joining FALCON.`;
+  const subject = "Welcome to FELCON 🎉";
+  const text = `Hello ${firstname}, Your OTP is ${otp}. Thanks for joining FELCON.`;
   const html = layout(
     "#4f46e5",
-    "Welcome to FALCON 🚀",
+    "Welcome to FELCON 🚀",
     `<h3 style="color:#333; text-align:center;">Hello ${firstname},</h3>
      <p style="color:#555; font-size:15px; text-align:center;">
-       Thank you for registering with <b>FALCON</b>. Use the OTP below to verify your account.
+       Thank you for registering with <b>FELCON</b>. Use the OTP below to verify your account.
      </p>
      <div style="text-align:center; margin:25px 0;">
        <span style="display:inline-block; background:#4f46e5; color:white; font-size:26px;
@@ -89,7 +89,7 @@ async function sendRegistrationEmail(email, firstname, otp) {
 }
 
 async function sendLoginEmail(email, otp) {
-  const subject = "FALCON Login Verification 🔐";
+  const subject = "FELCON Login Verification 🔐";
   const text = `Your login OTP is ${otp}`;
   const html = layout(
     "#10b981",
@@ -118,7 +118,7 @@ async function sendLoginEmail(email, otp) {
  * Sent to BUYER after buyProduct succeeds.
  */
 async function sendOrderPlacedEmail(buyerEmail, { buyerName, orderId, productTitle, price, paymentMethod, breakdown }) {
-  const subject = "Order Placed Successfully 🛒 — FALCON";
+  const subject = "Order Placed Successfully 🛒 — FELCON";
   const text = `Hi ${buyerName}, your order for "${productTitle}" has been placed. Order ID: ${orderId}`;
   const html = layout(
     "#0077b6",
@@ -146,7 +146,7 @@ async function sendOrderPlacedEmail(buyerEmail, { buyerName, orderId, productTit
  * Sent to SELLER when a new buy order comes in.
  */
 async function sendNewOrderNotificationEmail(sellerEmail, { sellerName, orderId, productTitle, price, buyerName, buyerEmail: bEmail, paymentMethod }) {
-  const subject = `New Order Received for "${productTitle}" — FALCON`;
+  const subject = `New Order Received for "${productTitle}" — FELCON`;
   const text = `Hi ${sellerName}, you have a new order from ${buyerName} for "${productTitle}". Order ID: ${orderId}`;
   const html = layout(
     "#7c3aed",
@@ -163,7 +163,7 @@ async function sendNewOrderNotificationEmail(sellerEmail, { sellerName, orderId,
        ${infoRow("Payment Status", badge("#10b981", "Completed"))}
      `)}
      <p style="color:#777; font-size:13px;">
-       Log in to your FALCON dashboard to confirm or reject this order.
+       Log in to your FELCON dashboard to confirm or reject this order.
      </p>`
   );
   await sendEmail(sellerEmail, subject, text, html);
@@ -188,7 +188,7 @@ async function sendOrderConfirmedEmail(buyerEmail, { buyerName, orderId, product
        ${infoRow("Confirmed At", new Date(confirmedAt).toLocaleString("en-IN"))}
        ${infoRow("Status", badge("#10b981", "Confirmed"))}
      `)}
-     <p style="color:#555;">Thank you for shopping on FALCON! 🎉</p>`
+     <p style="color:#555;">Thank you for shopping on FELCON! 🎉</p>`
   );
   await sendEmail(buyerEmail, subject, text, html);
 }
@@ -211,7 +211,7 @@ async function sendOrderRejectedEmail(buyerEmail, { buyerName, orderId, productT
        ${infoRow("Status", badge("#ef4444", "Rejected"))}
      `)}
      <p style="color:#777; font-size:13px;">
-       If a payment was made, a refund will be processed within 5–7 business days. Browse other devices on FALCON.
+       If a payment was made, a refund will be processed within 5–7 business days. Browse other devices on FELCON.
      </p>`
   );
   await sendEmail(buyerEmail, subject, text, html);
@@ -234,7 +234,7 @@ async function sendOrderCancelledEmail(sellerEmail, { sellerName, orderId, produ
        ${infoRow("Status", badge("#f59e0b", "Cancelled"))}
      `)}
      <p style="color:#777; font-size:13px;">
-       No action is required from your side. Continue managing your listings on FALCON.
+       No action is required from your side. Continue managing your listings on FELCON.
      </p>`
   );
   await sendEmail(sellerEmail, subject, text, html);
@@ -248,15 +248,15 @@ async function sendOrderCancelledEmail(sellerEmail, { sellerName, orderId, produ
  * Sent to USER after purchasing a subscription (and becoming a seller).
  */
 async function sendSubscriptionPurchasedEmail(email, { firstname, plan, price, startDate, endDate, activeListingsLimit }) {
-  const subject = `You're now a Seller on FALCON 🎉 — ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`;
-  const text = `Congratulations ${firstname}! Your ${plan} subscription is active. You are now a seller on FALCON.`;
+  const subject = `You're now a Seller on FELCON 🎉 — ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`;
+  const text = `Congratulations ${firstname}! Your ${plan} subscription is active. You are now a seller on FELCON.`;
   const listingsLabel = activeListingsLimit === -1 ? "Unlimited" : `Up to ${activeListingsLimit}`;
   const html = layout(
     "#4f46e5",
     "Seller Subscription Active 🚀",
     `<p style="color:#333; font-size:15px;">Congratulations, <b>${firstname}</b>! 🎉</p>
      <p style="color:#555;">Your subscription is now active and your account has been <b>upgraded to Seller</b>.
-       You can now start listing devices on FALCON.
+       You can now start listing devices on FELCON.
      </p>
      ${infoTable(`
        ${infoRow("Plan", `<b>${plan.charAt(0).toUpperCase() + plan.slice(1)}</b>`)}
@@ -275,7 +275,7 @@ async function sendSubscriptionPurchasedEmail(email, { firstname, plan, price, s
  * Sent to SELLER after upgrading their plan.
  */
 async function sendSubscriptionUpgradedEmail(email, { firstname, oldPlan, newPlan, price, endDate }) {
-  const subject = `Plan Upgraded to ${newPlan.charAt(0).toUpperCase() + newPlan.slice(1)} ⬆️ — FALCON`;
+  const subject = `Plan Upgraded to ${newPlan.charAt(0).toUpperCase() + newPlan.slice(1)} ⬆️ — FELCON`;
   const text = `Hi ${firstname}, your plan has been upgraded from ${oldPlan} to ${newPlan}.`;
   const html = layout(
     "#7c3aed",
@@ -289,7 +289,7 @@ async function sendSubscriptionUpgradedEmail(email, { firstname, oldPlan, newPla
        ${infoRow("New Expiry", new Date(endDate).toDateString())}
        ${infoRow("Status", badge("#10b981", "Active"))}
      `)}
-     <p style="color:#555;">Enjoy your upgraded benefits on FALCON!</p>`
+     <p style="color:#555;">Enjoy your upgraded benefits on FELCON!</p>`
   );
   await sendEmail(email, subject, text, html);
 }
@@ -298,14 +298,14 @@ async function sendSubscriptionUpgradedEmail(email, { firstname, oldPlan, newPla
  * Sent to SELLER when admin revokes their subscription.
  */
 async function sendSubscriptionRevokedEmail(email, { firstname }) {
-  const subject = "Your FALCON Seller Subscription Has Been Revoked";
-  const text = `Hi ${firstname}, your seller subscription on FALCON has been revoked by an administrator.`;
+  const subject = "Your FELCON Seller Subscription Has Been Revoked";
+  const text = `Hi ${firstname}, your seller subscription on FELCON has been revoked by an administrator.`;
   const html = layout(
     "#ef4444",
     "Subscription Revoked",
     `<p style="color:#333; font-size:15px;">Hi <b>${firstname}</b>,</p>
      <p style="color:#555;">
-       Your seller subscription on FALCON has been <b>revoked</b> by an administrator.
+       Your seller subscription on FELCON has been <b>revoked</b> by an administrator.
        Your account has been reverted to a regular user.
      </p>
      <p style="color:#555;">
@@ -327,7 +327,7 @@ async function sendSubscriptionRevokedEmail(email, { firstname }) {
  */
 async function sendDeviceListingSubmittedEmail(email, { firstname, listingId, deviceName, category, finalPrice }) {
   const subject = `Your Device Has Been Listed — ${deviceName}`;
-  const text = `Hi ${firstname}, your device "${deviceName}" has been listed on FALCON. Expected price: ₹${finalPrice}`;
+  const text = `Hi ${firstname}, your device "${deviceName}" has been listed on FELCON. Expected price: ₹${finalPrice}`;
   const html = layout(
     "#0077b6",
     "Device Listed Successfully 📱",
@@ -385,7 +385,7 @@ async function sendListingAcceptedEmail(email, { firstname, listingId, deviceNam
        ${slotsHtml}
      </table>
      <p style="color:#777; font-size:13px; margin-top:16px;">
-       Log in to FALCON to confirm your preferred slot and payment method.
+       Log in to FELCON to confirm your preferred slot and payment method.
      </p>`
   );
   await sendEmail(email, subject, text, html);
@@ -464,7 +464,7 @@ async function sendListingCompletedEmail(email, { firstname, listingId, deviceNa
     "Transaction Completed ✅",
     `<p style="color:#333; font-size:15px;">Hi <b>${firstname}</b>,</p>
      <p style="color:#555;">
-       The transaction for your device has been <b>completed</b> by the seller. Thank you for using FALCON!
+       The transaction for your device has been <b>completed</b> by the seller. Thank you for using FELCON!
      </p>
      ${infoTable(`
        ${infoRow("Listing ID", `<code>${listingId}</code>`)}
@@ -473,7 +473,7 @@ async function sendListingCompletedEmail(email, { firstname, listingId, deviceNa
        ${infoRow("Completed At", new Date(completedAt).toLocaleString("en-IN"))}
        ${infoRow("Status", badge("#10b981", "Completed"))}
      `)}
-     <p style="color:#555;">We hope you had a great experience selling on FALCON! 🎉</p>`
+     <p style="color:#555;">We hope you had a great experience selling on FELCON! 🎉</p>`
   );
   await sendEmail(email, subject, text, html);
 }
@@ -504,7 +504,7 @@ async function sendOrderShippedEmail(buyerEmail, { buyerName, orderId, productTi
        ${infoRow("Status", badge("#0077b6", "Shipped"))}
      `)}
      <p style="color:#777; font-size:13px;">
-       You will receive another notification once your order is delivered. Thank you for shopping on FALCON!
+       You will receive another notification once your order is delivered. Thank you for shopping on FELCON!
      </p>`
   );
   await sendEmail(buyerEmail, subject, text, html);
@@ -533,7 +533,7 @@ async function sendOrderDeliveredToBuyerEmail(buyerEmail, { buyerName, orderId, 
        ${infoRow("Status", badge("#10b981", "Delivered"))}
      `)}
      <p style="color:#555;">
-       If you have any issues with your order, please contact us through the FALCON app. Happy shopping! 🛍️
+       If you have any issues with your order, please contact us through the FELCON app. Happy shopping! 🛍️
      </p>`
   );
   await sendEmail(buyerEmail, subject, text, html);
@@ -561,7 +561,7 @@ async function sendOrderDeliveredToSellerEmail(sellerEmail, { sellerName, orderI
        ${infoRow("Status", badge("#10b981", "Delivered"))}
      `)}
      <p style="color:#777; font-size:13px;">
-       Thank you for selling on FALCON. Keep listing great devices!
+       Thank you for selling on FELCON. Keep listing great devices!
      </p>`
   );
   await sendEmail(sellerEmail, subject, text, html);
@@ -575,14 +575,14 @@ async function sendOrderDeliveredToSellerEmail(sellerEmail, { sellerName, orderI
  * Sent to SELLER when admin pauses their subscription.
  */
 async function sendSellerPausedEmail(email, { firstname, lastname, reason, pausedAt }) {
-  const subject = "Your FALCON Seller Account Has Been Temporarily Suspended";
-  const text = `Hi ${firstname}, your FALCON seller account has been temporarily suspended. Reason: ${reason}`;
+  const subject = "Your FELCON Seller Account Has Been Temporarily Suspended";
+  const text = `Hi ${firstname}, your FELCON seller account has been temporarily suspended. Reason: ${reason}`;
   const html = layout(
     "#f59e0b",
     "Account Temporarily Suspended ⚠️",
     `<p style="color:#333; font-size:15px;">Hi <b>${firstname} ${lastname}</b>,</p>
      <p style="color:#555;">
-       Your FALCON seller account and subscription have been <b>temporarily suspended</b> by our admin team
+       Your FELCON seller account and subscription have been <b>temporarily suspended</b> by our admin team
        pending review.
      </p>
      ${infoTable(`
@@ -606,14 +606,14 @@ async function sendSellerPausedEmail(email, { firstname, lastname, reason, pause
  * Sent to SELLER when admin permanently bans their account.
  */
 async function sendSellerBannedEmail(email, { firstname, lastname, reason, bannedAt }) {
-  const subject = "Your FALCON Seller Account Has Been Permanently Banned";
-  const text = `Hi ${firstname}, your FALCON seller account has been permanently banned. Reason: ${reason}`;
+  const subject = "Your FELCON Seller Account Has Been Permanently Banned";
+  const text = `Hi ${firstname}, your FELCON seller account has been permanently banned. Reason: ${reason}`;
   const html = layout(
     "#ef4444",
     "Account Permanently Banned ❌",
     `<p style="color:#333; font-size:15px;">Hi <b>${firstname} ${lastname}</b>,</p>
      <p style="color:#555;">
-       After a review of your account activity, your FALCON seller account has been <b>permanently banned</b>
+       After a review of your account activity, your FELCON seller account has been <b>permanently banned</b>
        for violating our Terms of Service.
      </p>
      ${infoTable(`
@@ -636,14 +636,14 @@ async function sendSellerBannedEmail(email, { firstname, lastname, reason, banne
  * Sent to SELLER when admin reinstates their paused account.
  */
 async function sendSellerReinstatedEmail(email, { firstname, lastname, note, reinstatedAt }) {
-  const subject = "Your FALCON Seller Account Has Been Reinstated ✅";
-  const text = `Hi ${firstname}, your FALCON seller account has been reinstated. You can now list products and make transactions again.`;
+  const subject = "Your FELCON Seller Account Has Been Reinstated ✅";
+  const text = `Hi ${firstname}, your FELCON seller account has been reinstated. You can now list products and make transactions again.`;
   const html = layout(
     "#10b981",
     "Account Reinstated ✅",
     `<p style="color:#333; font-size:15px;">Hi <b>${firstname} ${lastname}</b>,</p>
      <p style="color:#555;">
-       We're pleased to let you know that your FALCON seller account has been <b>reinstated</b>.
+       We're pleased to let you know that your FELCON seller account has been <b>reinstated</b>.
        You can now resume listing products and making transactions.
      </p>
      ${infoTable(`
@@ -653,7 +653,7 @@ async function sendSellerReinstatedEmail(email, { firstname, lastname, note, rei
        ${infoRow("Status", badge("#10b981", "Active"))}
      `)}
      <p style="color:#555;">
-       Thank you for your patience during the review process. Welcome back to FALCON!
+       Thank you for your patience during the review process. Welcome back to FELCON!
      </p>
      <p style="color:#777; font-size:13px;">
        Please ensure your future activity complies with our Terms of Service to avoid further action.
