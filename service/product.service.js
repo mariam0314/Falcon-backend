@@ -53,11 +53,47 @@ exports.getProducts = async (query) => {
   }
 
   // Base filter — no location field here
-  const baseFilter = { status: "available" };
-  if (category) baseFilter.category = category;
-  if (subcategory) baseFilter.subcategory = subcategory;
-  if (condition) baseFilter.condition = condition;
-  if (deviceType) baseFilter.deviceType = deviceType;
+  const baseFilter = { status: query.status || "available" };
+  if (category && String(category).toLowerCase() !== "all") {
+    const categories = Array.isArray(category)
+      ? category
+      : String(category)
+          .split(",")
+          .map((c) => c.trim())
+          .filter(Boolean);
+    if (categories.length === 1) {
+      baseFilter.category = new RegExp(`^${categories[0]}$`, "i");
+    } else if (categories.length > 1) {
+      baseFilter.category = { $in: categories.map((c) => new RegExp(`^${c}$`, "i")) };
+    }
+  }
+  if (subcategory) baseFilter.subcategory = new RegExp(`^${subcategory.trim()}$`, "i");
+  if (condition) {
+    const conditions = Array.isArray(condition)
+      ? condition
+      : String(condition)
+          .split(",")
+          .map((c) => c.trim())
+          .filter(Boolean);
+    if (conditions.length === 1) {
+      baseFilter.condition = new RegExp(`^${conditions[0]}$`, "i");
+    } else if (conditions.length > 1) {
+      baseFilter.condition = { $in: conditions.map((c) => new RegExp(`^${c}$`, "i")) };
+    }
+  }
+  if (deviceType) {
+    const types = Array.isArray(deviceType)
+      ? deviceType
+      : String(deviceType)
+          .split(",")
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean);
+    if (types.length === 1) {
+      baseFilter.deviceType = new RegExp(`^${types[0]}$`, "i");
+    } else if (types.length > 1) {
+      baseFilter.deviceType = { $in: types.map((t) => new RegExp(`^${t}$`, "i")) };
+    }
+  }
   if (color) baseFilter.color = new RegExp(color, "i");
   if (storage) {
     const storages = Array.isArray(storage)
