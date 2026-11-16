@@ -1,7 +1,7 @@
 const express = require("express");
 const router  = express.Router();
 
-const BuySellController = require("../controller/buySell.controller");
+const BuySellController = require("../controller/buysell.controller");
 
 const {
   authMiddleware,
