@@ -1,7 +1,7 @@
 // routes/deviceSell.routes.js
 const express              = require("express");
 const router               = express.Router();
-const DeviceSellController = require("../controller/deviceSell.controller");
+const DeviceSellController = require("../controllers/deviceSell.controller");
 const { authMiddleware, authorize } = require("../middleware/auth.middleware");
 const { rejectionUpload, validateRejectionFiles } = require("../middleware/multer.middleware");
 

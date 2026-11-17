@@ -1,6 +1,6 @@
 const express            = require("express");
 const router             = express.Router({ mergeParams: true }); // ← mergeParams for :productId
-const ReviewController   = require("../controller/review.controller");
+const ReviewController   = require("../controllers/review.controller");
 const {
   authMiddleware,
   optionalAuthenticate,

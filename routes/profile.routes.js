@@ -3,7 +3,7 @@ const router  = express.Router();
 
 const { authMiddleware }  = require("../middleware/auth.middleware");
 const { profileUpload } = require("../middleware/multer.middleware"); // single file upload
-const ProfileController   = require("../controller/profile.controller");
+const ProfileController   = require("../controllers/profile.controller");
 
 // All profile routes require auth
 router.use(authMiddleware);

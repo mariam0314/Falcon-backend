@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/auth.middleware");
-const messageController = require("../controller/message.controller");
+const messageController = require("../controllers/message.controller");
 const { ChatUpload } = require("../middleware/multer.middleware");
 
 // Send a message (with optional image)

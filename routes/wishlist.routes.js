@@ -1,6 +1,6 @@
 const express             = require("express");
 const router              = express.Router();
-const WishlistController  = require("../controller/wishlist.controller");
+const WishlistController  = require("../controllers/wishlist.controller");
 const { authMiddleware, blockAdmin }  = require("../middleware/auth.middleware");
 
 // All wishlist routes require login
