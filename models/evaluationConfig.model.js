@@ -54,7 +54,7 @@ const evaluationConfigSchema = new mongoose.Schema(
   {
     category: {
       type:     String,
-      enum:     ["mobile", "laptop", "tablet", "smartwatch", "television"],
+      enum:     ["mobile", "laptop", "tablet", "smartwatch"],
       required: true,
       unique:   true,
     },

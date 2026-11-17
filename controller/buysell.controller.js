@@ -1,6 +1,7 @@
 const mongoose       = require("mongoose");
 const ProductService = require("../service/product.service");
 const OrderModel     = require("../models/order.model");
+const Coupon         = require("../models/coupon.model");
 const emailService   = require("../service/email.service");
 
 const COMMISSION_RATES = OrderModel.COMMISSION_RATES;
@@ -34,7 +35,7 @@ exports.buyProduct = async (req, res) => {
       return res.status(400).json({ message: "Invalid product ID" });
     }
 
-    const { paymentMethod, paymentId } = req.body;
+    const { paymentMethod, paymentId, shippingAddress, couponCode, exchange } = req.body;
 
     if (!paymentMethod) {
       return res.status(400).json({
@@ -67,15 +68,89 @@ exports.buyProduct = async (req, res) => {
     const buyerRole  = req.user.role;
     const sellerRole = product.listedByRole;
 
-    if (buyerRole === "user" && sellerRole !== "seller") {
+    if (buyerRole === "user" && sellerRole !== "seller" && sellerRole !== "admin") {
       return res.status(403).json({
-        message: "Users can only purchase products listed by sellers",
+        message: "Users can only purchase products listed by sellers or admin",
         code:    "INVALID_TRANSACTION",
       });
     }
 
-    const { rate, amount } = calculateCommission(product.price, buyerRole);
-    const sellerEarnings   = parseFloat((product.price - amount).toFixed(2));
+    // ── Coupon deduction ──────────────────────────────────────────────────
+    let couponData = { code: null, discountAmount: 0 };
+    if (couponCode) {
+      const foundCoupon = await Coupon.findOne({
+        code: couponCode.trim().toUpperCase(),
+        isActive: true,
+      });
+      if (foundCoupon && (!foundCoupon.expiresAt || new Date(foundCoupon.expiresAt) > new Date())) {
+        if (product.price >= (foundCoupon.minOrderAmount || 0)) {
+          let disc = 0;
+          if (foundCoupon.discountType === "percentage") {
+            disc = (product.price * foundCoupon.discountValue) / 100;
+            if (foundCoupon.maxDiscount) disc = Math.min(disc, foundCoupon.maxDiscount);
+          } else {
+            disc = foundCoupon.discountValue;
+          }
+          disc = Math.min(disc, product.price);
+          couponData = {
+            code: foundCoupon.code,
+            discountAmount: Math.round(disc),
+          };
+          await Coupon.findByIdAndUpdate(foundCoupon._id, { $inc: { timesUsed: 1 } });
+        }
+      }
+    }
+
+    // ── Exchange / Trade-in deduction ─────────────────────────────────────
+    let exchangeData = {
+      isExchange: false,
+      device: null,
+      value: 0,
+      status: null,
+    };
+    if (exchange && (exchange.isExchange || exchange.device) && Number(exchange.value) > 0) {
+      exchangeData = {
+        isExchange: true,
+        device: exchange.device || "Trade-in Device",
+        value: Number(exchange.value),
+        status: "pending_pickup",
+      };
+    }
+
+    const finalPayable = Math.max(0, product.price - couponData.discountAmount - exchangeData.value);
+
+    const { rate, amount } = calculateCommission(finalPayable > 0 ? finalPayable : product.price, buyerRole);
+    const sellerEarnings   = parseFloat(Math.max(0, (finalPayable > 0 ? finalPayable : product.price) - amount).toFixed(2));
+
+    // ── Shipping Address ──────────────────────────────────────────────────
+    const resolvedAddress = {
+      street: shippingAddress?.street || shippingAddress?.address || req.user.defaultAddress?.street || "Default Delivery Street",
+      city: shippingAddress?.city || req.user.defaultAddress?.city || "New Delhi",
+      state: shippingAddress?.state || req.user.defaultAddress?.state || "Delhi",
+      pincode: shippingAddress?.pincode || req.user.defaultAddress?.pincode || "110001",
+      full: shippingAddress?.full || (shippingAddress ? `${shippingAddress.street || shippingAddress.address || ""}, ${shippingAddress.city || ""}, ${shippingAddress.state || ""} - ${shippingAddress.pincode || ""}` : null),
+      contactPhone: shippingAddress?.contactPhone || shippingAddress?.phone || req.user.phone || req.user.mobile || "9876543210",
+    };
+
+    // ── Tracking & Courier Setup ──────────────────────────────────────────
+    const trackingId = "FEL-" + Math.floor(10000000 + Math.random() * 90000000);
+    const estimatedDelivery = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const courier = {
+      partner: "BlueDart Express",
+      trackingId,
+      estimatedDelivery,
+      shippedAt: null,
+      deliveredAt: null,
+    };
+
+    const initialHistory = [
+      {
+        status: "confirmed",
+        label: "Order Confirmed",
+        timestamp: new Date(),
+        note: "Order placed & verified. Payment processed via " + paymentMethod + ".",
+      },
+    ];
 
     const order = await OrderModel.create({
       buyer:            req.user._id,
@@ -84,25 +159,30 @@ exports.buyProduct = async (req, res) => {
       sellerRole,
       product:          product._id,
       transactionType:  "buy",
-      salePrice:        product.price,
+      salePrice:        finalPayable,
       commissionRate:   rate,
       commissionAmount: amount,
       sellerEarnings,
       paymentMethod,
-      paymentId:        paymentId || null,
-      paymentStatus:    (paymentMethod !== "Cash" && !!paymentId) ? "completed" : "pending",
-      paidAt:           (paymentMethod !== "Cash" && !!paymentId) ? new Date() : null,
-      status:           "pending",
+      paymentId:        paymentId || ("PAY-" + Math.floor(10000000 + Math.random() * 90000000)),
+      paymentStatus:    "completed",
+      paidAt:           new Date(),
+      status:           "confirmed",
+      courier,
+      statusHistory:    initialHistory,
+      shippingAddress:  resolvedAddress,
+      exchange:         exchangeData,
+      coupon:           couponData,
     });
 
-    await ProductService.markAsReserved(product._id);
+    await ProductService.markAsSold(product._id);
 
-    // ── Email: notify buyer that order was placed ──────────────────────────
+    // ── Email: notify buyer that order was placed & confirmed ─────────────
     emailService.sendOrderPlacedEmail(req.user.email, {
       buyerName:   `${req.user.firstname} ${req.user.lastname}`,
       orderId:     order._id,
       productTitle: product.title,
-      price:       product.price,
+      price:       finalPayable,
       paymentMethod,
     }).catch((err) => console.error("sendOrderPlacedEmail error:", err));
 
@@ -113,7 +193,7 @@ exports.buyProduct = async (req, res) => {
         sellerName:   `${seller.firstname} ${seller.lastname}`,
         orderId:      order._id,
         productTitle: product.title,
-        price:        product.price,
+        price:        finalPayable,
         buyerName:    `${req.user.firstname} ${req.user.lastname}`,
         buyerEmail:   req.user.email,
         paymentMethod,
@@ -122,23 +202,31 @@ exports.buyProduct = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Payment successful. Order placed — waiting for seller to confirm.",
+      message: "Order placed and confirmed successfully! Verified FELCON refurbished device is being prepared.",
       data: {
         orderId:       order._id,
-        status:        "pending",
+        status:        "confirmed",
         paymentStatus: "completed",
         paymentMethod,
         paidAt:        order.paidAt,
+        courier,
+        shippingAddress: resolvedAddress,
+        exchange:      exchangeData,
+        coupon:        couponData,
         product: {
           id:    product._id,
           title: product.title,
           price: product.price,
+          brand: product.brand,
+          condition: product.condition,
         },
         breakdown: {
-          productPrice:     product.price,
+          originalPrice:    product.price,
+          couponDiscount:   couponData.discountAmount,
+          exchangeDiscount: exchangeData.value,
           commissionRate:   `${rate}%`,
           commissionAmount: amount,
-          totalPaid:        product.price,
+          totalPaid:        finalPayable,
           sellerReceives:   sellerEarnings,
         },
       },
@@ -506,5 +594,132 @@ exports.updateOrderStatus = async (req, res) => {
   } catch (error) {
     console.error("updateOrderStatus error:", error);
     res.status(500).json({ message: "Failed to update order status" });
+  }
+};
+
+
+// ─── VALIDATE & APPLY COUPON ─────────────────────────────────────────────────
+// POST /orders/apply-coupon
+exports.applyCoupon = async (req, res) => {
+  try {
+    const { code, amount, orderAmount: explicitAmount } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, message: "Coupon code is required" });
+    }
+
+    const orderAmount = Number(amount ?? explicitAmount) || 0;
+    const coupon = await Coupon.findOne({
+      code: code.trim().toUpperCase(),
+      isActive: true,
+    });
+
+    if (!coupon) {
+      return res.status(404).json({ success: false, message: "Invalid or inactive coupon code" });
+    }
+
+    if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
+      return res.status(400).json({ success: false, message: "This coupon code has expired" });
+    }
+
+    if (orderAmount < (coupon.minOrderAmount || 0)) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum order value of ₹${(coupon.minOrderAmount || 0).toLocaleString("en-IN")} required for this coupon`,
+      });
+    }
+
+    let discount = 0;
+    if (coupon.discountType === "percentage") {
+      discount = (orderAmount * coupon.discountValue) / 100;
+      if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
+    } else {
+      discount = coupon.discountValue;
+    }
+
+    discount = Math.min(discount, orderAmount);
+    discount = Math.round(discount);
+
+    res.status(200).json({
+      success: true,
+      message: `Coupon "${coupon.code}" applied! You saved ₹${discount.toLocaleString("en-IN")}`,
+      data: {
+        code: coupon.code,
+        description: coupon.description,
+        discountAmount: discount,
+        finalAmount: Math.max(0, orderAmount - discount),
+      },
+    });
+  } catch (err) {
+    console.error("applyCoupon error:", err);
+    res.status(500).json({ success: false, message: "Failed to validate coupon" });
+  }
+};
+
+
+// ─── TRACK ORDER (7 Stages) ──────────────────────────────────────────────────
+// GET /orders/:orderId/track
+exports.trackOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    if (!isValidObjectId(orderId)) {
+      return res.status(400).json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await OrderModel.findById(orderId)
+      .populate("product", "title brand category images price condition storage color")
+      .populate("buyer", BUYER_FIELDS)
+      .populate("seller", SELLER_FIELDS)
+      .lean();
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    const userId = req.user._id.toString();
+    const isBuyer = order.buyer?._id?.toString() === userId;
+    const isSeller = order.seller?._id?.toString() === userId;
+    const isAdmin = req.user.role === "admin";
+
+    if (!isBuyer && !isSeller && !isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const STAGES = [
+      { key: "confirmed", label: "Order Confirmed", desc: "Your refurbished order has been placed and confirmed." },
+      { key: "processing", label: "Processing", desc: "FELCON fulfillment center is preparing your package." },
+      { key: "quality_check", label: "Quality Check", desc: "32-point final diagnostic and sanitization passed." },
+      { key: "packed", label: "Packed", desc: "Carefully sealed in tamper-proof FELCON eco-packaging." },
+      { key: "shipped", label: "Shipped", desc: "Package handed over to BlueDart Express." },
+      { key: "out_for_delivery", label: "Out for Delivery", desc: "Delivery executive is on the way to your address." },
+      { key: "delivered", label: "Delivered", desc: "Package successfully handed over to you." },
+    ];
+
+    const currentStatusIndex = STAGES.findIndex((s) => s.key === order.status);
+
+    const timeline = STAGES.map((stage, idx) => {
+      const historyItem = (order.statusHistory || []).find((h) => h.status === stage.key);
+      return {
+        key: stage.key,
+        label: stage.label,
+        description: stage.desc,
+        isCompleted: currentStatusIndex >= idx && currentStatusIndex !== -1,
+        isCurrent: order.status === stage.key,
+        timestamp: historyItem ? historyItem.timestamp : null,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        order,
+        timeline,
+        currentStage: order.status,
+        courier: order.courier,
+        shippingAddress: order.shippingAddress,
+      },
+    });
+  } catch (err) {
+    console.error("trackOrder error:", err);
+    res.status(500).json({ success: false, message: "Failed to track order" });
   }
 };

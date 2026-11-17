@@ -106,4 +106,38 @@ router.post(
   AdminController.reinstateSellerSubscription
 );
 
+////////////////////////////////////////////////////////////////////
+//// CASHIFY-STYLE MARKETPLACE ADMIN OPERATIONS
+////////////////////////////////////////////////////////////////////
+
+// Analytics & KPI Metrics
+router.get("/analytics", AdminController.getDashboardAnalytics);
+
+// Refurbished Products & Inventory
+router.get("/products", AdminController.getAllProductsAdmin);
+router.patch("/products/:id", AdminController.updateProductAdmin);
+
+// Selling Requests (Sell Your Old Device)
+router.get("/selling-requests", AdminController.getSellingRequests);
+router.patch("/selling-requests/:id/status", AdminController.updateSellingRequestStatus);
+
+// Exchange Requests (Trade-In)
+router.get("/exchange-requests", AdminController.getExchangeRequests);
+router.patch("/exchange-requests/:id/status", AdminController.updateExchangeRequestStatus);
+
+// 32-Point Quality Inspection Management
+router.get("/inspections", AdminController.getDeviceInspections);
+router.post("/inspections/run", AdminController.runDeviceInspection);
+
+// 7-Stage Order Lifecycle Tracking
+router.patch("/orders/:id/lifecycle", AdminController.updateOrderLifecycle);
+
+// Coupons & Promotional Discounts
+router.get("/coupons", AdminController.getCouponsAdmin);
+router.post("/coupons", AdminController.createCouponAdmin);
+router.patch("/coupons/:id/toggle", AdminController.toggleCouponAdmin);
+
+// Customer Account Management
+router.get("/customers", AdminController.getCustomersAdmin);
+
 module.exports = router;

@@ -17,7 +17,7 @@ const productSchema = new mongoose.Schema(
     category: {
       type:     String,
       required: [true, "Category is required"],
-      enum:     ["mobile", "laptop", "tablet", "smartwatch","television"],
+      enum:     ["mobile", "laptop", "tablet", "smartwatch"],
     },
 
     subcategory: {
@@ -40,8 +40,46 @@ const productSchema = new mongoose.Schema(
     // ─── DEVICE SPECS ──────────────────────────────────────────────
     condition: {
       type:     String,
-      enum:     ["Fair", "Good", "Superb"],
+      enum:     ["Like New", "Superb", "Good", "Fair"],
       required: [true, "Condition is required"],
+    },
+
+    releaseYear: {
+      type: Number,
+      default: 2024,
+    },
+
+    batteryHealth: {
+      type: Number,
+      default: 92,
+      min: 50,
+      max: 100,
+    },
+
+    warranty: {
+      type: String,
+      default: "6 Months FELCON Assured Warranty + 7 Days Replacement",
+    },
+
+    boxContents: {
+      type: [String],
+      default: ["Certified Refurbished Device", "Fast Charging Cable / Adapter", "SIM Ejector Pin", "Warranty Card", "FELCON Eco-Box"],
+    },
+
+    inspectionCertified: {
+      type: Boolean,
+      default: true,
+    },
+
+    inspectionRecord: {
+      certifiedAt: { type: Date, default: Date.now },
+      inspectorName: { type: String, default: "FELCON Quality Lab" },
+      passedPoints: { type: Number, default: 32 },
+      totalPoints: { type: Number, default: 32 },
+      grade: { type: String, default: "Superb" },
+      batteryTestedHealth: { type: Number, default: 92 },
+      displayScore: { type: String, default: "100% Functional - Original OEM" },
+      chassisCondition: { type: String, default: "Flawless - 0 Scratches" },
     },
 
     storage: {

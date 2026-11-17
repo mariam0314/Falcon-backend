@@ -1,6 +1,8 @@
-const mongoose  = require("mongoose");
-const UserModel = require("../models/user.model");
-const Product   = require("../models/product.model");
+const mongoose   = require("mongoose");
+const UserModel  = require("../models/user.model");
+const Product    = require("../models/product.model");
+const Coupon     = require("../models/coupon.model");
+const OrderModel = require("../models/order.model");
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -250,8 +252,7 @@ exports.checkoutFromCart = async (req, res) => {
       return res.status(400).json({ message: "Invalid product ID" });
     }
 
-    const { paymentMethod, paymentId } = req.body;
-    const isPaid = paymentMethod !== "Cash" && !!paymentId;
+    const { paymentMethod, paymentId, shippingAddress, couponCode, exchange } = req.body;
     const VALID_METHODS = ["Cash", "UPI", "Card", "NetBanking"];
 
     if (!paymentMethod) {
@@ -270,8 +271,8 @@ exports.checkoutFromCart = async (req, res) => {
 
     // Check product is still in cart
     const user = await UserModel.findById(userId).select("cart").lean();
-    const cart     = user?.cart || [];      
-    const inCart = user.cart.some(
+    const cart = user?.cart || [];      
+    const inCart = cart.some(
       (item) => item.product.toString() === productId
     );
 
@@ -294,19 +295,11 @@ exports.checkoutFromCart = async (req, res) => {
       });
     }
 
-    // Forward to buySell controller logic by making internal call
-    // Attach productId to params and paymentMethod to body then call buyProduct
-    req.params.id = productId;
-
-    // Remove from cart after successful order placement
-    // This is done AFTER order is confirmed — handled in next step
-    // We just proxy to the buy flow here
-    const OrderModel       = require("../models/order.model");
     const ProductService   = require("../service/product.service");
     const COMMISSION_RATES = OrderModel.COMMISSION_RATES;
 
     function calculateCommission(price, role) {
-      const rates  = COMMISSION_RATES[role];
+      const rates  = COMMISSION_RATES[role] || COMMISSION_RATES.user;
       const rate   = (rates.min + rates.max) / 2;
       const amount = parseFloat(((price * rate) / 100).toFixed(2));
       return { rate, amount };
@@ -316,17 +309,90 @@ exports.checkoutFromCart = async (req, res) => {
       return res.status(400).json({ message: "You cannot buy your own product" });
     }
 
-    const buyerRole  = req.user.role;  // "user"
+    const buyerRole  = req.user.role;
     const sellerRole = product.listedByRole;
 
-    if (buyerRole === "user" && sellerRole !== "seller") {
+    if (buyerRole === "user" && sellerRole !== "seller" && sellerRole !== "admin") {
       return res.status(403).json({
-        message: "Users can only purchase products listed by sellers",
+        message: "Users can only purchase products listed by sellers or admin",
       });
     }
 
-    const { rate, amount } = calculateCommission(product.price, buyerRole);
-    const sellerEarnings   = parseFloat((product.price - amount).toFixed(2));
+    // ── Coupon deduction ──────────────────────────────────────────────────
+    let couponData = { code: null, discountAmount: 0 };
+    if (couponCode) {
+      const foundCoupon = await Coupon.findOne({
+        code: couponCode.trim().toUpperCase(),
+        isActive: true,
+      });
+      if (foundCoupon && (!foundCoupon.expiresAt || new Date(foundCoupon.expiresAt) > new Date())) {
+        if (product.price >= (foundCoupon.minOrderAmount || 0)) {
+          let disc = 0;
+          if (foundCoupon.discountType === "percentage") {
+            disc = (product.price * foundCoupon.discountValue) / 100;
+            if (foundCoupon.maxDiscount) disc = Math.min(disc, foundCoupon.maxDiscount);
+          } else {
+            disc = foundCoupon.discountValue;
+          }
+          disc = Math.min(disc, product.price);
+          couponData = {
+            code: foundCoupon.code,
+            discountAmount: Math.round(disc),
+          };
+          await Coupon.findByIdAndUpdate(foundCoupon._id, { $inc: { timesUsed: 1 } });
+        }
+      }
+    }
+
+    // ── Exchange / Trade-in deduction ─────────────────────────────────────
+    let exchangeData = {
+      isExchange: false,
+      device: null,
+      value: 0,
+      status: null,
+    };
+    if (exchange && (exchange.isExchange || exchange.device) && Number(exchange.value) > 0) {
+      exchangeData = {
+        isExchange: true,
+        device: exchange.device || "Trade-in Device",
+        value: Number(exchange.value),
+        status: "pending_pickup",
+      };
+    }
+
+    const finalPayable = Math.max(0, product.price - couponData.discountAmount - exchangeData.value);
+    const { rate, amount } = calculateCommission(finalPayable > 0 ? finalPayable : product.price, buyerRole);
+    const sellerEarnings   = parseFloat(Math.max(0, (finalPayable > 0 ? finalPayable : product.price) - amount).toFixed(2));
+
+    // ── Shipping Address ──────────────────────────────────────────────────
+    const resolvedAddress = {
+      street: shippingAddress?.street || shippingAddress?.address || req.user.defaultAddress?.street || "Default Delivery Street",
+      city: shippingAddress?.city || req.user.defaultAddress?.city || "New Delhi",
+      state: shippingAddress?.state || req.user.defaultAddress?.state || "Delhi",
+      pincode: shippingAddress?.pincode || req.user.defaultAddress?.pincode || "110001",
+      full: shippingAddress?.full || (shippingAddress ? `${shippingAddress.street || shippingAddress.address || ""}, ${shippingAddress.city || ""}, ${shippingAddress.state || ""} - ${shippingAddress.pincode || ""}` : null),
+      contactPhone: shippingAddress?.contactPhone || shippingAddress?.phone || req.user.phone || req.user.mobile || "9876543210",
+    };
+
+    // ── Tracking & Courier Setup ──────────────────────────────────────────
+    const trackingId = "FEL-" + Math.floor(10000000 + Math.random() * 90000000);
+    const estimatedDelivery = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const courier = {
+      partner: "BlueDart Express",
+      trackingId,
+      estimatedDelivery,
+      shippedAt: null,
+      deliveredAt: null,
+    };
+
+    const initialHistory = [
+      {
+        status: "confirmed",
+        label: "Order Confirmed",
+        timestamp: new Date(),
+        note: "Order placed & confirmed from cart via " + paymentMethod + ".",
+      },
+    ];
 
     const order = await OrderModel.create({
       buyer:            userId,
@@ -335,19 +401,24 @@ exports.checkoutFromCart = async (req, res) => {
       sellerRole,
       product:          product._id,
       transactionType:  "buy",
-      salePrice:        product.price,
+      salePrice:        finalPayable,
       commissionRate:   rate,
       commissionAmount: amount,
       sellerEarnings,
       paymentMethod,
-      paymentId:        paymentId || null,
-      paymentStatus:    isPaid ? "completed" : "pending",
-      paidAt:           isPaid ? new Date() : null,
-      status:           "pending",
+      paymentId:        paymentId || ("PAY-" + Math.floor(10000000 + Math.random() * 90000000)),
+      paymentStatus:    "completed",
+      paidAt:           new Date(),
+      status:           "confirmed",
+      courier,
+      statusHistory:    initialHistory,
+      shippingAddress:  resolvedAddress,
+      exchange:         exchangeData,
+      coupon:           couponData,
     });
 
-    // Reserve product
-    await ProductService.markAsReserved(product._id);
+    // Mark as sold
+    await ProductService.markAsSold(product._id);
 
     // Remove from cart after order placed
     await UserModel.findByIdAndUpdate(userId, {
@@ -356,23 +427,29 @@ exports.checkoutFromCart = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Order placed from cart. Waiting for seller to confirm.",
+      message: "Order placed and confirmed successfully! Verified FELCON refurbished device is being prepared.",
       data: {
         orderId:       order._id,
-        status:        "pending",
-        paymentStatus: isPaid ? "completed" : "pending",
+        status:        "confirmed",
+        paymentStatus: "completed",
         paymentMethod,
         paidAt:        order.paidAt,
+        courier,
+        shippingAddress: resolvedAddress,
+        exchange:      exchangeData,
+        coupon:        couponData,
         product: {
           id:    product._id,
           title: product.title,
           price: product.price,
         },
         breakdown: {
-          productPrice:     product.price,
+          originalPrice:    product.price,
+          couponDiscount:   couponData.discountAmount,
+          exchangeDiscount: exchangeData.value,
           commissionRate:   `${rate}%`,
           commissionAmount: amount,
-          totalPaid:        product.price,
+          totalPaid:        finalPayable,
           sellerReceives:   sellerEarnings,
         },
       },
@@ -385,16 +462,14 @@ exports.checkoutFromCart = async (req, res) => {
 
 // ─── CHECKOUT ALL ITEMS FROM CART ─────────────────────────────────────────
 // POST /api/cart/checkout
-// body: { paymentMethod: "Cash" | "UPI" | "Card" | "NetBanking" }
-// Checks out ALL products currently in cart — no need to send productIds
+// body: { paymentMethod, shippingAddress, couponCode }
+// Checks out ALL products currently in cart
 
 exports.checkoutMultiple = async (req, res) => {
   try {
-    const userId        = req.user._id;
-    const { paymentMethod, paymentId } = req.body;
-    const isPaid = paymentMethod !== "Cash" && !!paymentId;
+    const userId = req.user._id;
+    const { paymentMethod, paymentId, shippingAddress, couponCode, exchange } = req.body;
 
-    // ── Validate payment method ─────────────────────────────────────────────
     const VALID_METHODS = ["Cash", "UPI", "Card", "NetBanking"];
 
     if (!paymentMethod) {
@@ -436,7 +511,7 @@ exports.checkoutMultiple = async (req, res) => {
       if (product.listedBy.toString() === userId.toString()) {
         ownProducts.push(product._id.toString());
       }
-      if (product.listedByRole !== "seller") {
+      if (product.listedByRole !== "seller" && product.listedByRole !== "admin") {
         invalidRole.push(product._id.toString());
       }
     }
@@ -448,12 +523,11 @@ exports.checkoutMultiple = async (req, res) => {
       });
     }
 
-    // If ALL products are invalid — stop here
     const validProducts = products.filter(
       (p) =>
         p.status === "available" &&
         p.listedBy.toString() !== userId.toString() &&
-        p.listedByRole === "seller"
+        (p.listedByRole === "seller" || p.listedByRole === "admin")
     );
 
     if (validProducts.length === 0) {
@@ -475,32 +549,97 @@ exports.checkoutMultiple = async (req, res) => {
           ...(invalidRole.length > 0 && {
             invalidRole: {
               ids:     invalidRole,
-              message: "Users can only purchase products listed by sellers",
+              message: "Products must be listed by verified sellers or FELCON admin",
             },
           }),
         },
       });
     }
 
-    // ── Place orders for all valid products ─────────────────────────────────
-    const OrderModel       = require("../models/order.model");
     const ProductService   = require("../service/product.service");
     const COMMISSION_RATES = OrderModel.COMMISSION_RATES;
 
     function calculateCommission(price, role) {
-      const rates  = COMMISSION_RATES[role];
+      const rates  = COMMISSION_RATES[role] || COMMISSION_RATES.user;
       const rate   = (rates.min + rates.max) / 2;
       const amount = parseFloat(((price * rate) / 100).toFixed(2));
       return { rate, amount };
     }
 
+    // ── Coupon calculation across cart ────────────────────────────────────
+    const cartSubtotal = validProducts.reduce((sum, p) => sum + p.price, 0);
+    let couponData = { code: null, discountAmount: 0 };
+    if (couponCode) {
+      const foundCoupon = await Coupon.findOne({
+        code: couponCode.trim().toUpperCase(),
+        isActive: true,
+      });
+      if (foundCoupon && (!foundCoupon.expiresAt || new Date(foundCoupon.expiresAt) > new Date())) {
+        if (cartSubtotal >= (foundCoupon.minOrderAmount || 0)) {
+          let disc = 0;
+          if (foundCoupon.discountType === "percentage") {
+            disc = (cartSubtotal * foundCoupon.discountValue) / 100;
+            if (foundCoupon.maxDiscount) disc = Math.min(disc, foundCoupon.maxDiscount);
+          } else {
+            disc = foundCoupon.discountValue;
+          }
+          disc = Math.min(disc, cartSubtotal);
+          couponData = {
+            code: foundCoupon.code,
+            discountAmount: Math.round(disc),
+          };
+          await Coupon.findByIdAndUpdate(foundCoupon._id, { $inc: { timesUsed: 1 } });
+        }
+      }
+    }
+
     const buyerRole = req.user.role;
     const now       = new Date();
 
+    const resolvedAddress = {
+      street: shippingAddress?.street || shippingAddress?.address || req.user.defaultAddress?.street || "Default Delivery Street",
+      city: shippingAddress?.city || req.user.defaultAddress?.city || "New Delhi",
+      state: shippingAddress?.state || req.user.defaultAddress?.state || "Delhi",
+      pincode: shippingAddress?.pincode || req.user.defaultAddress?.pincode || "110001",
+      full: shippingAddress?.full || (shippingAddress ? `${shippingAddress.street || shippingAddress.address || ""}, ${shippingAddress.city || ""}, ${shippingAddress.state || ""} - ${shippingAddress.pincode || ""}` : null),
+      contactPhone: shippingAddress?.contactPhone || shippingAddress?.phone || req.user.phone || req.user.mobile || "9876543210",
+    };
+
+    let remainingDiscount = couponData.discountAmount;
+
     const orderResults = await Promise.all(
-      validProducts.map(async (product) => {
-        const { rate, amount } = calculateCommission(product.price, buyerRole);
-        const sellerEarnings   = parseFloat((product.price - amount).toFixed(2));
+      validProducts.map(async (product, idx) => {
+        // Distribute coupon discount among items
+        let itemDiscount = 0;
+        if (idx === validProducts.length - 1) {
+          itemDiscount = remainingDiscount;
+        } else {
+          itemDiscount = Math.round((product.price / cartSubtotal) * couponData.discountAmount);
+          remainingDiscount = Math.max(0, remainingDiscount - itemDiscount);
+        }
+
+        const finalItemPrice = Math.max(0, product.price - itemDiscount);
+        const { rate, amount } = calculateCommission(finalItemPrice, buyerRole);
+        const sellerEarnings   = parseFloat(Math.max(0, finalItemPrice - amount).toFixed(2));
+
+        const trackingId = "FEL-" + Math.floor(10000000 + Math.random() * 90000000);
+        const estimatedDelivery = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        const courier = {
+          partner: "BlueDart Express",
+          trackingId,
+          estimatedDelivery,
+          shippedAt: null,
+          deliveredAt: null,
+        };
+
+        const initialHistory = [
+          {
+            status: "confirmed",
+            label: "Order Confirmed",
+            timestamp: now,
+            note: "Order placed & confirmed via " + paymentMethod + ".",
+          },
+        ];
 
         const order = await OrderModel.create({
           buyer:            userId,
@@ -509,23 +648,31 @@ exports.checkoutMultiple = async (req, res) => {
           sellerRole:       product.listedByRole,
           product:          product._id,
           transactionType:  "buy",
-          salePrice:        product.price,
+          salePrice:        finalItemPrice,
           commissionRate:   rate,
           commissionAmount: amount,
           sellerEarnings,
           paymentMethod,
-          paymentId:        paymentId || null,
-          paymentStatus:    isPaid ? "completed" : "pending",
-          paidAt:           isPaid ? now : null,
-          status:           "pending",
+          paymentId:        paymentId || ("PAY-" + Math.floor(10000000 + Math.random() * 90000000)),
+          paymentStatus:    "completed",
+          paidAt:           now,
+          status:           "confirmed",
+          courier,
+          statusHistory:    initialHistory,
+          shippingAddress:  resolvedAddress,
+          coupon: {
+            code: couponData.code,
+            discountAmount: itemDiscount,
+          },
         });
 
-        await ProductService.markAsReserved(product._id);
+        await ProductService.markAsSold(product._id);
 
         return {
           orderId:       order._id,
-          status:        "pending",
-          paymentStatus: isPaid ? "completed" : "pending",
+          status:        "confirmed",
+          paymentStatus: "completed",
+          courier,
           product: {
             id:    product._id,
             title: product.title,
@@ -533,9 +680,10 @@ exports.checkoutMultiple = async (req, res) => {
           },
           breakdown: {
             productPrice:     product.price,
+            discount:         itemDiscount,
             commissionRate:   `${rate}%`,
             commissionAmount: amount,
-            totalPaid:        product.price,
+            totalPaid:        finalItemPrice,
             sellerReceives:   sellerEarnings,
           },
         };
@@ -548,31 +696,15 @@ exports.checkoutMultiple = async (req, res) => {
       $pull: { cart: { product: { $in: orderedProductIds } } },
     });
 
-    const grandTotal = validProducts.reduce((sum, p) => sum + p.price, 0);
-
-    // ── Build response — include skipped products info if any ────────────────
-    const skipped = [...ownProducts, ...invalidRole];
+    const grandTotal = orderResults.reduce((sum, o) => sum + o.breakdown.totalPaid, 0);
 
     res.status(201).json({
       success:    true,
-      message:    `${orderResults.length} order(s) placed successfully. Waiting for sellers to confirm.`,
+      message:    `${orderResults.length} order(s) placed and confirmed successfully! BlueDart Express delivery scheduled.`,
       count:      orderResults.length,
       grandTotal,
+      coupon:     couponData,
       orders:     orderResults,
-
-      // Only included if some products were skipped
-      ...(unavailable.length > 0 && {
-        removedFromCart: {
-          ids:     unavailable,
-          message: "These products were no longer available and removed from your cart",
-        },
-      }),
-      ...(skipped.length > 0 && {
-        skipped: {
-          ids:     skipped,
-          message: "These products were skipped — still in your cart",
-        },
-      }),
     });
   } catch (error) {
     console.error("checkoutMultiple error:", error);

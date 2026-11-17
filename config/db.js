@@ -148,16 +148,21 @@ async function connectToDB() {
     console.log("Server is Connected to Local MongoDB (port 27017) ✅");
   }
 
-  // 3. Auto-seed if database is empty or has fewer than 30 products
+  // 3. Auto-seed if database is empty, has fewer than 75 products, or lacks evaluation configs
   try {
     const Product = require("../models/product.model");
-    const count = await Product.countDocuments();
-    if (count < 30) {
-      console.log(`Product count is currently ${count}. Running auto-seed...`);
-      const seedDatabase = require("../seed/comprehensiveSeed");
-      await seedDatabase();
+    const EvaluationConfig = require("../models/evaluationConfig.model");
+    const [pCount, eCount] = await Promise.all([
+      Product.countDocuments(),
+      EvaluationConfig.countDocuments(),
+    ]);
+
+    if (pCount < 75 || eCount === 0) {
+      console.log(`Product count: ${pCount}, EvaluationConfig count: ${eCount}. Running master seed...`);
+      const seedMasterDatabase = require("../seed/masterSeed");
+      await seedMasterDatabase();
     } else {
-      console.log(`Database currently has ${count} products available.`);
+      console.log(`Database currently has ${pCount} products available across all categories.`);
     }
   } catch (err) {
     console.warn("Auto-seed check notice:", err.message);

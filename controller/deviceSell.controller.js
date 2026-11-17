@@ -392,7 +392,21 @@ exports.submitListing = async (req, res) => {
       }
     }
 
+    const requestId = `FEL-SELL-${Math.floor(100000 + Math.random() * 900000)}`;
+    const pickupDetails = {
+      contactName: req.body.contactName || `${req.user.firstname} ${req.user.lastname}`,
+      contactPhone: req.body.contactPhone || req.user.phone || req.user.mobile || "9876543210",
+      address: req.body.pickupAddress || req.body.address || req.user.defaultAddress?.street || "Pickup Address",
+      city: req.body.city || req.user.defaultAddress?.city || "New Delhi",
+      pincode: req.body.pincode || req.user.defaultAddress?.pincode || "110001",
+      date: req.body.pickupDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      timeRange: req.body.timeRange || "10:00 AM - 01:00 PM",
+      status: "scheduled",
+    };
+
     const listing = await DeviceListing.create({
+      requestId,
+      pickup: pickupDetails,
       listedBy: userId,
       brand: catalog.brand,
       category,
@@ -438,9 +452,11 @@ exports.submitListing = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Your device has been listed. Sellers will contact you soon.",
+      message: "Selling request scheduled successfully! An executive will inspect your device at your doorstep.",
       data: {
         listingId: listing._id,
+        requestId: listing.requestId,
+        pickup: listing.pickup,
         device: `${model.name} (${buildVariantLabel(variant.specs, category)})`,
         category,
         finalPrice: pricing.finalPrice,

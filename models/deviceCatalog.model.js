@@ -5,7 +5,6 @@ const mongoose = require("mongoose");
 //   mobile/tablet : { ram: "8 GB", storage: "256 GB" }
 //   laptop        : { ram: "16 GB", storage: "512 GB", processor: "Intel i5 12th Gen" }
 //   smartwatch    : { caseSize: "44", connectivity: "GPS + Cellular" }
-//   television    : { screenSize: "55", resolution: "4K UHD", displayType: "OLED" }
 const variantSchema = new mongoose.Schema(
   {
     specs:     { type: Map, of: String, default: {} }, // flexible key-value
@@ -29,7 +28,7 @@ const deviceCatalogSchema = new mongoose.Schema(
     brand: { type: String, required: true, trim: true },
     category: {
       type: String,
-      enum: ["mobile", "laptop", "tablet", "smartwatch", "television"],
+      enum: ["mobile", "laptop", "tablet", "smartwatch"],
       required: true,
     },
     logo:     { type: String, default: null },

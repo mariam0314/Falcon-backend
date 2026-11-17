@@ -154,6 +154,13 @@ router.get("/laptops", optionalAuthenticate, (req, res, next) => {
 ////////////////////////////////////////////////////////////////////
 
 /**
+ * @route   GET /api/products/:id/inspection
+ * @desc    Get 32-point inspection certificate for a product
+ * @access  Public
+ */
+router.get("/:id/inspection", optionalAuthenticate, ProductController.getProductInspection);
+
+/**
  * @route   GET /api/products/:id
  * @desc    Get single product by ID
  * @access  Public

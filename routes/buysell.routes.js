@@ -87,6 +87,28 @@ router.get(
 );
 
 /**
+ * @route   POST /api/orders/apply-coupon
+ * @desc    Validate and calculate coupon discount
+ * @access  Private (Seller, User)
+ */
+router.post(
+  "/apply-coupon",
+  authMiddleware,
+  BuySellController.applyCoupon
+);
+
+/**
+ * @route   GET /api/orders/:orderId/track
+ * @desc    Get order tracking timeline across 7 stages
+ * @access  Private (Buyer, Seller, Admin)
+ */
+router.get(
+  "/:orderId/track",
+  authMiddleware,
+  BuySellController.trackOrder
+);
+
+/**
  * @route   GET /api/orders/my
  * @desc    Get own order history (buy + sell)
  * @access  Private (Seller, User)

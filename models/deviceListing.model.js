@@ -13,12 +13,19 @@ const pickupSchema = new mongoose.Schema(
   {
     status: {
       type: String,
-      enum: ["awaiting_user_confirmation", "scheduled", "completed"],
-      default: "awaiting_user_confirmation",
+      enum: ["awaiting_user_confirmation", "scheduled", "agent_assigned", "inspected", "completed", "cancelled"],
+      default: "scheduled",
     },
+    contactName:    { type: String, default: null },
+    contactPhone:   { type: String, default: null },
+    address:        { type: String, default: null },
+    city:           { type: String, default: null },
+    pincode:        { type: String, default: null },
+    date:           { type: String, default: null },
+    timeRange:      { type: String, default: null },
     proposedSlots:  [timeslotSchema],
     confirmedSlot:  { type: timeslotSchema, default: null },
-    paymentMethod:  { type: String, enum: ["cash", "upi", "bank_transfer", null], default: null },
+    paymentMethod:  { type: String, enum: ["cash", "upi", "bank_transfer", null], default: "upi" },
     paymentDetails: { type: String, default: null },
     confirmedAt:    { type: Date, default: null },
   },
@@ -27,13 +34,14 @@ const pickupSchema = new mongoose.Schema(
 
 const deviceListingSchema = new mongoose.Schema(
   {
+    requestId: { type: String, unique: true, sparse: true },
     listedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
     // ── Device identity ──────────────────────────────────────────
     brand:    { type: String, required: true },
     category: {
       type: String,
-      enum: ["mobile", "laptop", "tablet", "smartwatch", "television"],
+      enum: ["mobile", "laptop", "tablet", "smartwatch"],
       required: true,
     },
     model:    { type: String, required: true },

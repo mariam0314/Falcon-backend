@@ -113,13 +113,64 @@ const orderSchema = new mongoose.Schema(
     },
 
     ////////////////////////////////////////////////////////////////////
-    //// ORDER STATUS
+    //// ORDER STATUS & TRACKING (Cashify 7-stage order lifecycle)
     ////////////////////////////////////////////////////////////////////
 
     status: {
       type:    String,
-      enum:    ["pending", "confirmed", "cancelled", "delivered", "rejected", "shipped"],
-      default: "pending",
+      enum:    [
+        "pending",
+        "confirmed",
+        "processing",
+        "quality_check",
+        "packed",
+        "shipped",
+        "out_for_delivery",
+        "delivered",
+        "cancelled",
+        "rejected"
+      ],
+      default: "confirmed",
+    },
+
+    courier: {
+      partner: { type: String, default: "BlueDart Express" },
+      trackingId: { type: String, default: null },
+      estimatedDelivery: { type: Date, default: null },
+      shippedAt: { type: Date, default: null },
+      deliveredAt: { type: Date, default: null },
+    },
+
+    statusHistory: [
+      {
+        status: { type: String },
+        label: { type: String },
+        timestamp: { type: Date, default: Date.now },
+        note: { type: String, default: "" },
+      },
+    ],
+
+    shippingAddress: {
+      street: { type: String, default: null },
+      city: { type: String, default: null },
+      state: { type: String, default: null },
+      pincode: { type: String, default: null },
+      full: { type: String, default: null },
+      contactPhone: { type: String, default: null },
+    },
+
+    // Trade-in / Exchange support
+    exchange: {
+      isExchange: { type: Boolean, default: false },
+      device: { type: String, default: null },
+      value: { type: Number, default: 0 },
+      status: { type: String, enum: ["pending_pickup", "inspected", "completed", "cancelled", null], default: null },
+    },
+
+    // Coupon applied
+    coupon: {
+      code: { type: String, default: null },
+      discountAmount: { type: Number, default: 0 },
     },
 
     // For sell requests — seller notes about the device
