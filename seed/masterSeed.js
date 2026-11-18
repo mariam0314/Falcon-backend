@@ -311,48 +311,15 @@ async function seedMasterDatabase() {
   await Product.insertMany(productDocs);
   console.log(`✅ Seeded ${productDocs.length} genuine 2022-2026 Products across 4 categories!`);
 
-  // 6. Seed DeviceCatalog for Selling / Trade-In for ALL 4 Categories
-  const allFinalProducts = await Product.find({});
-  const catalogMap = {};
-
-  allFinalProducts.forEach((dev) => {
-    const key = `${dev.brand}_${dev.category}`;
-    if (!catalogMap[key]) {
-      catalogMap[key] = {
-        brand: dev.brand,
-        category: dev.category,
-        models: [],
-      };
-    }
-
-    const specsMap = new Map();
-    if (dev.specs?.performance?.ram) specsMap.set("ram", dev.specs.performance.ram);
-    if (dev.storage) specsMap.set("storage", dev.storage);
-    if (dev.specs?.processor) specsMap.set("processor", dev.specs.processor);
-
-    // Don't add duplicate model names
-    const exists = catalogMap[key].models.some(m => m.name === dev.title);
-    if (!exists) {
-      catalogMap[key].models.push({
-        name: dev.title,
-        image: dev.images[0],
-        variants: [
-          {
-            specs: specsMap,
-            basePrice: Math.round(dev.price * 0.72),
-          },
-        ],
-        soldCount: Math.floor(Math.random() * 40) + 15,
-      });
-    }
-  });
-
+  // 6. Seed DeviceCatalog for Selling / Trade-In for ALL 4 Categories (1,065 Mobile + 115 Non-Mobile)
+  const generateFullCatalog = require("./generateFullCatalog");
+  const catalogDocs = generateFullCatalog();
   await DeviceCatalog.deleteMany({});
-  const catalogDocs = Object.values(catalogMap);
   await DeviceCatalog.insertMany(catalogDocs);
   console.log(`✅ Seeded DeviceCatalog for ${catalogDocs.length} brand-category groups across all 4 device types!`);
 
   // 7. Seed Initial Inspections
+  const allFinalProducts = await Product.find({});
   await Inspection.deleteMany({});
   const sampleProducts = allFinalProducts.slice(0, 30);
   const inspections = sampleProducts.map((p, idx) => ({

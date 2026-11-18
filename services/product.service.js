@@ -52,15 +52,31 @@ exports.getProducts = async (query) => {
     if (cached) return JSON.parse(cached);
   }
 
+  // Category alias normalization
+  const normalizeCat = (c) => {
+    const low = String(c).trim().toLowerCase();
+    if (["smartphones", "smartphone", "phones", "phone", "mobiles", "mobile"].includes(low)) return "mobile";
+    if (["laptops", "laptop"].includes(low)) return "laptop";
+    if (["tablets", "tablet"].includes(low)) return "tablet";
+    if (["smartwatches", "smartwatch", "watches", "watch"].includes(low)) return "smartwatch";
+    return low;
+  };
+
   // Base filter — no location field here
-  const baseFilter = { status: query.status || "available" };
+  const baseFilter = {};
+  if (query.status) {
+    baseFilter.status = query.status;
+  } else if (!query.availability) {
+    baseFilter.status = "available";
+  }
+
   if (category && String(category).toLowerCase() !== "all") {
-    const categories = Array.isArray(category)
+    const categories = (Array.isArray(category)
       ? category
-      : String(category)
-          .split(",")
-          .map((c) => c.trim())
-          .filter(Boolean);
+      : String(category).split(",")
+    )
+      .map((c) => normalizeCat(c))
+      .filter(Boolean);
     if (categories.length === 1) {
       baseFilter.category = new RegExp(`^${categories[0]}$`, "i");
     } else if (categories.length > 1) {
@@ -94,7 +110,16 @@ exports.getProducts = async (query) => {
       baseFilter.deviceType = { $in: types.map((t) => new RegExp(`^${t}$`, "i")) };
     }
   }
-  if (color) baseFilter.color = new RegExp(color, "i");
+  if (color) {
+    const colors = (Array.isArray(color) ? color : String(color).split(","))
+      .map((c) => c.trim())
+      .filter(Boolean);
+    if (colors.length === 1) {
+      baseFilter.color = new RegExp(colors[0], "i");
+    } else if (colors.length > 1) {
+      baseFilter.color = { $in: colors.map((c) => new RegExp(c, "i")) };
+    }
+  }
   if (storage) {
     const storages = Array.isArray(storage)
       ? storage
@@ -121,7 +146,7 @@ exports.getProducts = async (query) => {
       baseFilter.brand = { $in: brands.map((b) => new RegExp(`^${b}$`, "i")) };
     }
   }
-  const rawYears = query.releaseYear || query.releaseYears || query.years || query["specs.releaseYear"];
+  const rawYears = query.releaseYear || query.releaseYears || query.years || query["specs.releaseYear"] || query.year;
   if (rawYears) {
     const parsedYears = (Array.isArray(rawYears) ? rawYears : String(rawYears).split(","))
       .map((y) => parseInt(String(y).trim()))
@@ -155,25 +180,137 @@ exports.getProducts = async (query) => {
     }
     baseFilter.$or = searchConditions;
   }
+  if (query.model) {
+    baseFilter.title = new RegExp(String(query.model).trim(), "i");
+  }
   if (query["specs.ram"] || query.ram) {
-    const r = query["specs.ram"] || query.ram;
-    baseFilter["specs.performance.ram"] = new RegExp(r, "i");
+    const rawR = query["specs.ram"] || query.ram;
+    const ramArr = (Array.isArray(rawR) ? rawR : String(rawR).split(","))
+      .map((r) => r.trim())
+      .filter(Boolean);
+    if (ramArr.length === 1) {
+      baseFilter["specs.performance.ram"] = new RegExp(ramArr[0], "i");
+    } else if (ramArr.length > 1) {
+      baseFilter["specs.performance.ram"] = { $in: ramArr.map((r) => new RegExp(r, "i")) };
+    }
   }
   if (query["specs.processor"] || query.processor) {
-    const p = query["specs.processor"] || query.processor;
-    baseFilter["specs.processor"] = new RegExp(p, "i");
+    const rawP = query["specs.processor"] || query.processor;
+    const pArr = (Array.isArray(rawP) ? rawP : String(rawP).split(","))
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (pArr.length === 1) {
+      baseFilter.$or = baseFilter.$or || [];
+      baseFilter.$or.push(
+        { "specs.processor": new RegExp(pArr[0], "i") },
+        { "specs.performance.chipsetFull": new RegExp(pArr[0], "i") }
+      );
+    } else if (pArr.length > 1) {
+      baseFilter.$or = baseFilter.$or || [];
+      pArr.forEach((p) => {
+        baseFilter.$or.push(
+          { "specs.processor": new RegExp(p, "i") },
+          { "specs.performance.chipsetFull": new RegExp(p, "i") }
+        );
+      });
+    }
   }
   if (query["specs.graphics"] || query.graphics) {
-    const g = query["specs.graphics"] || query.graphics;
-    baseFilter["specs.graphics"] = new RegExp(g, "i");
+    const rawG = query["specs.graphics"] || query.graphics;
+    const gArr = (Array.isArray(rawG) ? rawG : String(rawG).split(","))
+      .map((g) => g.trim())
+      .filter(Boolean);
+    if (gArr.length === 1) {
+      baseFilter["specs.graphics"] = new RegExp(gArr[0], "i");
+    } else if (gArr.length > 1) {
+      baseFilter["specs.graphics"] = { $in: gArr.map((g) => new RegExp(g, "i")) };
+    }
   }
   if (query["specs.os"] || query.os) {
-    const o = query["specs.os"] || query.os;
-    baseFilter["specs.os"] = new RegExp(o, "i");
+    const rawO = query["specs.os"] || query.os;
+    const oArr = (Array.isArray(rawO) ? rawO : String(rawO).split(","))
+      .map((o) => o.trim())
+      .filter(Boolean);
+    if (oArr.length === 1) {
+      baseFilter["specs.os"] = new RegExp(oArr[0], "i");
+    } else if (oArr.length > 1) {
+      baseFilter["specs.os"] = { $in: oArr.map((o) => new RegExp(o, "i")) };
+    }
   }
   if (query["specs.laptopType"] || query.laptopType) {
-    const lt = query["specs.laptopType"] || query.laptopType;
-    baseFilter["specs.laptopType"] = new RegExp(lt, "i");
+    const rawLt = query["specs.laptopType"] || query.laptopType;
+    const ltArr = (Array.isArray(rawLt) ? rawLt : String(rawLt).split(","))
+      .map((lt) => lt.trim())
+      .filter(Boolean);
+    if (ltArr.length === 1) {
+      baseFilter["specs.laptopType"] = new RegExp(ltArr[0], "i");
+    } else if (ltArr.length > 1) {
+      baseFilter["specs.laptopType"] = { $in: ltArr.map((lt) => new RegExp(lt, "i")) };
+    }
+  }
+  if (query["specs.camera"] || query.camera) {
+    const rawCam = query["specs.camera"] || query.camera;
+    const camArr = (Array.isArray(rawCam) ? rawCam : String(rawCam).split(","))
+      .map((c) => c.trim())
+      .filter(Boolean);
+    if (camArr.length === 1) {
+      baseFilter["specs.rearCamera.primary"] = new RegExp(camArr[0], "i");
+    } else if (camArr.length > 1) {
+      baseFilter["specs.rearCamera.primary"] = { $in: camArr.map((c) => new RegExp(c, "i")) };
+    }
+  }
+  if (query["specs.battery"] || query.battery) {
+    const rawBat = query["specs.battery"] || query.battery;
+    const batArr = (Array.isArray(rawBat) ? rawBat : String(rawBat).split(","))
+      .map((b) => b.trim())
+      .filter(Boolean);
+    if (batArr.length === 1) {
+      baseFilter["specs.battery.capacity"] = new RegExp(batArr[0], "i");
+    } else if (batArr.length > 1) {
+      baseFilter["specs.battery.capacity"] = { $in: batArr.map((b) => new RegExp(b, "i")) };
+    }
+  }
+  if (query["specs.refresh"] || query.refresh || query.refreshRate) {
+    const rawRef = query["specs.refresh"] || query.refresh || query.refreshRate;
+    const refArr = (Array.isArray(rawRef) ? rawRef : String(rawRef).split(","))
+      .map((r) => r.trim())
+      .filter(Boolean);
+    if (refArr.length === 1) {
+      baseFilter["specs.display.refreshRate"] = new RegExp(refArr[0], "i");
+    } else if (refArr.length > 1) {
+      baseFilter["specs.display.refreshRate"] = { $in: refArr.map((r) => new RegExp(r, "i")) };
+    }
+  }
+  if (query["specs.display"] || query.display) {
+    const rawDisp = query["specs.display"] || query.display;
+    const dispArr = (Array.isArray(rawDisp) ? rawDisp : String(rawDisp).split(","))
+      .map((d) => d.trim())
+      .filter(Boolean);
+    if (dispArr.length === 1) {
+      baseFilter["specs.display.sizeInches"] = new RegExp(dispArr[0], "i");
+    } else if (dispArr.length > 1) {
+      baseFilter["specs.display.sizeInches"] = { $in: dispArr.map((d) => new RegExp(d, "i")) };
+    }
+  }
+  if (query["specs.dispType"] || query.dispType || query.displayType) {
+    const rawDt = query["specs.dispType"] || query.dispType || query.displayType;
+    const dtArr = (Array.isArray(rawDt) ? rawDt : String(rawDt).split(","))
+      .map((d) => d.trim())
+      .filter(Boolean);
+    if (dtArr.length === 1) {
+      baseFilter["specs.display.type"] = new RegExp(dtArr[0], "i");
+    } else if (dtArr.length > 1) {
+      baseFilter["specs.display.type"] = { $in: dtArr.map((d) => new RegExp(d, "i")) };
+    }
+  }
+  if (query.availability) {
+    const avail = String(query.availability).toLowerCase();
+    if (avail.includes("in stock") && !avail.includes("out of stock")) {
+      baseFilter.status = "available";
+      baseFilter.quantity = { $gt: 0 };
+    } else if (avail.includes("out of stock") && !avail.includes("in stock")) {
+      baseFilter.$or = [{ status: { $in: ["sold", "inactive"] } }, { quantity: 0 }];
+    }
   }
   if (minPrice || maxPrice) {
     baseFilter.price = {};
@@ -182,7 +319,7 @@ exports.getProducts = async (query) => {
   }
 
   const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(200, Math.max(1, parseInt(limit)));
+  const limitNum = Math.min(2500, Math.max(1, parseInt(limit || 50)));
   const skip = (pageNum - 1) * limitNum;
 
   ////////////////////////////////////////////////////////////////////
