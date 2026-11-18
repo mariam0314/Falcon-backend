@@ -148,13 +148,15 @@ async function connectToDB() {
     console.log("Server is Connected to Local MongoDB (port 27017) ✅");
   }
 
-  // 3. Auto-seed if database is empty, has fewer than 75 products, or lacks evaluation configs
+  // 3. Auto-seed if database is empty, has fewer than 75 products, or lacks evaluation configs/device catalogs
   try {
     const Product = require("../models/product.model");
     const EvaluationConfig = require("../models/evaluationConfig.model");
-    const [pCount, eCount] = await Promise.all([
+    const DeviceCatalog = require("../models/deviceCatalog.model");
+    const [pCount, eCount, dCount] = await Promise.all([
       Product.countDocuments(),
       EvaluationConfig.countDocuments(),
+      DeviceCatalog.countDocuments(),
     ]);
 
     if (pCount < 75 || eCount === 0) {
@@ -163,6 +165,14 @@ async function connectToDB() {
       await seedMasterDatabase();
     } else {
       console.log(`Database currently has ${pCount} products available across all categories.`);
+      if (dCount === 0) {
+        console.log("DeviceCatalog count is 0. Running catalog auto-seed...");
+        const generateFullCatalog = require("../seed/generateFullCatalog");
+        const catalogDocs = generateFullCatalog();
+        await DeviceCatalog.deleteMany({});
+        await DeviceCatalog.insertMany(catalogDocs);
+        console.log(`✅ Seeded DeviceCatalog with ${catalogDocs.length} brand groups!`);
+      }
     }
   } catch (err) {
     console.warn("Auto-seed check notice:", err.message);

@@ -16,6 +16,9 @@ router.get("/variant-fields", DeviceSellController.getVariantFields);
 // GET /api/device-sell/brands?category=mobile
 router.get("/brands", DeviceSellController.getBrands);
 
+// GET /api/device-sell/seed-catalog (auto-populates catalog if needed)
+router.get("/seed-catalog", DeviceSellController.seedCatalogEndpoint);
+
 // GET /api/device-sell/brands/:brand/models?category=mobile
 router.get("/brands/:brand/models", DeviceSellController.getModelsByBrand);
 

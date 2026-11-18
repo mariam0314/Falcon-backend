@@ -1,9 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const pdfDevices = require('../../scripts/maintenance/pdf_device_list');
+const pdfDevices = require('./pdf_device_list');
 const masterData = require('./masterCatalogueData');
-
-const publicDir = path.join(__dirname, '../../Frontend/public');
 
 function toModelSlug(brand, modelName) {
   let clean = modelName.trim();

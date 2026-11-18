@@ -62,10 +62,32 @@ exports.getBrands = async (req, res) => {
         allowed: Object.keys(VARIANT_FIELDS_MAP),
       });
     }
-    const brands = await DeviceCatalog.find({ category })
+    let brands = await DeviceCatalog.find({ category })
       .select("brand logo")
-      .select("brand")
       .lean();
+
+    // Auto self-heal: if catalog in DB is empty, seed on-demand
+    if (brands.length === 0) {
+      try {
+        const generateFullCatalog = require("../seed/generateFullCatalog");
+        const catalogDocs = generateFullCatalog();
+        if (catalogDocs && catalogDocs.length > 0) {
+          for (const doc of catalogDocs) {
+            await DeviceCatalog.updateOne(
+              { brand: doc.brand, category: doc.category },
+              { $set: doc },
+              { upsert: true }
+            );
+          }
+          brands = await DeviceCatalog.find({ category })
+            .select("brand logo")
+            .lean();
+        }
+      } catch (seedErr) {
+        console.warn("Auto-seed on getBrands warning:", seedErr.message);
+      }
+    }
+
     if (brands.length === 0) {
       return res
         .status(404)
@@ -93,9 +115,32 @@ exports.getModelsByBrand = async (req, res) => {
     if (!category) {
       return res.status(400).json({ message: "category is required" });
     }
-    const catalog = await DeviceCatalog.findOne({ brand, category })
+    let catalog = await DeviceCatalog.findOne({ brand, category })
       .select("brand models.name models.image models.soldCount models._id")
       .lean();
+
+    if (!catalog) {
+      try {
+        const generateFullCatalog = require("../seed/generateFullCatalog");
+        const catalogDocs = generateFullCatalog();
+        const found = catalogDocs.find(
+          (d) => d.brand.toLowerCase() === brand.toLowerCase() && d.category === category
+        );
+        if (found) {
+          await DeviceCatalog.updateOne(
+            { brand: found.brand, category: found.category },
+            { $set: found },
+            { upsert: true }
+          );
+          catalog = await DeviceCatalog.findOne({ brand: found.brand, category })
+            .select("brand models.name models.image models.soldCount models._id")
+            .lean();
+        }
+      } catch (seedErr) {
+        console.warn("Auto-seed on getModelsByBrand warning:", seedErr.message);
+      }
+    }
+
     if (!catalog) {
       return res.status(404).json({
         message: `Brand "${brand}" not found in category "${category}"`,
@@ -115,6 +160,30 @@ exports.getModelsByBrand = async (req, res) => {
   } catch (error) {
     console.error("getModelsByBrand error:", error);
     res.status(500).json({ message: "Failed to fetch models" });
+  }
+};
+
+/** Direct catalog seed trigger endpoint */
+exports.seedCatalogEndpoint = async (req, res) => {
+  try {
+    const generateFullCatalog = require("../seed/generateFullCatalog");
+    const catalogDocs = generateFullCatalog();
+    for (const doc of catalogDocs) {
+      await DeviceCatalog.updateOne(
+        { brand: doc.brand, category: doc.category },
+        { $set: doc },
+        { upsert: true }
+      );
+    }
+    const count = await DeviceCatalog.countDocuments();
+    res.status(200).json({
+      success: true,
+      message: `Catalog successfully seeded with ${count} brand documents across all 4 categories.`,
+      count,
+    });
+  } catch (error) {
+    console.error("seedCatalogEndpoint error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
